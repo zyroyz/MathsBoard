@@ -81,6 +81,31 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'DM Sans',sans-seri
 .qb-q-add{flex-shrink:0;width:26px;height:26px;background:var(--accent-l);color:var(--accent);border:none;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;line-height:1;transition:all .15s}
 .qb-q-add:hover{background:var(--accent);color:#fff}
 
+/* ── SELECT / AI ── */
+#canvasWrap.mode-select{cursor:crosshair}
+#selBox{position:fixed;border:2px solid #2563eb;background:rgba(37,99,235,0.08);border-radius:4px;pointer-events:none;display:none;z-index:20}
+#aiPanel{position:fixed;z-index:2000;width:380px;max-height:70vh;background:#fff;border-radius:16px;box-shadow:0 8px 40px rgba(0,0,0,0.18);display:none;flex-direction:column;overflow:hidden;font-family:'DM Sans',sans-serif}
+#aiPanel.show{display:flex}
+.ai-header{padding:14px 16px;background:#f8faff;border-bottom:1px solid rgba(0,0,0,0.07);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.ai-header-title{font-size:13px;font-weight:600;color:#1a1a2e;display:flex;align-items:center;gap:8px}
+.ai-spark{width:20px;height:20px;background:linear-gradient(135deg,#2563eb,#7c3aed);border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.ai-close{width:26px;height:26px;border:none;background:#f3f4f6;border-radius:6px;cursor:pointer;font-size:13px;color:#6b7280;transition:all .15s;display:flex;align-items:center;justify-content:center}
+.ai-close:hover{background:#fee2e2;color:#ef4444}
+.ai-body{flex:1;overflow-y:auto;padding:16px;font-size:13px;line-height:1.7;color:#374151}
+.ai-body::-webkit-scrollbar{width:4px}
+.ai-body::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:2px}
+.ai-step{margin-bottom:14px;padding:12px 14px;background:#f9fafb;border-radius:10px;border-left:3px solid #2563eb}
+.ai-step-num{font-size:10px;font-weight:700;color:#2563eb;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.ai-step-text{font-size:13px;color:#1a1a2e;line-height:1.6}
+.ai-thinking{display:flex;align-items:center;gap:10px;padding:20px;color:#6b7280;font-size:13px}
+.ai-dots span{display:inline-block;width:6px;height:6px;background:#2563eb;border-radius:50%;margin:0 2px;animation:dot-bounce .8s infinite}
+.ai-dots span:nth-child(2){animation-delay:.15s}
+.ai-dots span:nth-child(3){animation-delay:.3s}
+@keyframes dot-bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-6px)}}
+.ai-footer{padding:10px 16px;border-top:1px solid rgba(0,0,0,0.07);display:flex;gap:8px;flex-shrink:0}
+.ai-retry{flex:1;height:32px;background:var(--accent-l);color:var(--accent);border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:500;cursor:pointer;transition:all .15s}
+.ai-retry:hover{background:var(--accent);color:#fff}
+
 #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:#1a1a2e;color:#fff;padding:10px 20px;border-radius:100px;font-size:13px;font-weight:500;box-shadow:0 4px 20px rgba(0,0,0,0.2);transition:transform .3s cubic-bezier(0.4,0,0.2,1);z-index:5000;pointer-events:none;white-space:nowrap}
 #toast.show{transform:translateX(-50%) translateY(0)}
 #loadingOverlay{position:fixed;inset:0;z-index:4000;background:rgba(255,255,255,0.9);backdrop-filter:blur(8px);display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px}
@@ -102,6 +127,9 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'DM Sans',sans-seri
   </button>
   <button class="tb-btn" id="toolPan" title="Pan (Space)" onclick="setTool('pan')">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/></svg>
+  </button>
+  <button class="tb-btn" id="toolSelect" title="Explain selection (A)" onclick="setTool('select')">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2A7.5 7.5 0 0 1 17 9.5c0 2.4-1.1 4.5-2.8 5.9L21 22l-1.4 1.4-6.8-6.8A7.5 7.5 0 1 1 9.5 2z"/><line x1="6" y1="9.5" x2="13" y2="9.5"/><line x1="9.5" y1="6" x2="9.5" y2="13"/></svg>
   </button>
   <div class="tb-sep"></div>
   <div class="tb-size-wrap">
@@ -166,6 +194,20 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'DM Sans',sans-seri
   <div class="qb-list" id="qbList" style="display:none"></div>
 </div>
 
+<div id="selBox"></div>
+<div id="aiPanel">
+  <div class="ai-header">
+    <div class="ai-header-title">
+      <div class="ai-spark"><svg width="12" height="12" viewBox="0 0 24 24" fill="white"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
+      Step-by-step explanation
+    </div>
+    <button class="ai-close" onclick="closeAI()">✕</button>
+  </div>
+  <div class="ai-body" id="aiBody"><div class="ai-thinking"><div class="ai-dots"><span></span><span></span><span></span></div>Analysing your selection…</div></div>
+  <div class="ai-footer">
+    <button class="ai-retry" onclick="retryAI()">↺ Try again</button>
+  </div>
+</div>
 <div id="toast"></div>
 <div id="loadingOverlay">
   <div class="spinner"></div>
@@ -184,6 +226,7 @@ const S={
   qbOpen:false,
   dragBlock:null, dragOX:0, dragOY:0,
   resizeBlock:null, resizeOW:0, resizeOX:0,
+  selecting:false, sel0x:0, sel0y:0, sel1x:0, sel1y:0,
 };
 
 // ── PERSIST ──────────────────────────────────────────────────
@@ -435,6 +478,7 @@ hc.addEventListener('pointerdown',e=>{
     // Click inside image body — fall through to drawing
   }
 
+  if(S.tool==='select'){startSel(sx,sy);return;}
   if(S.tool==='pan'){isPan=true;plx=sx;ply=sy;wrap.classList.add('panning');return;}
   startStroke(sx,sy);
 });
@@ -457,6 +501,7 @@ hc.addEventListener('pointermove',e=>{
     redrawAll();return;
   }
   if(isPan){doPan(sx-plx,sy-ply);plx=sx;ply=sy;return;}
+  if(S.selecting){updateSel(sx,sy);return;}
   if(S.drawing&&S.currentStroke)addPoint(sx,sy);
 });
 
@@ -464,21 +509,24 @@ hc.addEventListener('pointerup',e=>{
   if(e.pointerType==='touch')return;
   e.preventDefault();
   pid=null;
+  const r=cRect();
+  const sx=e.clientX-r.left,sy=e.clientY-r.top;
   if(S.dragBlock){S.dragBlock=null;save();return;}
   if(S.resizeBlock){S.resizeBlock=null;save();return;}
   if(isPan){isPan=false;wrap.classList.remove('panning');return;}
+  if(S.selecting){endSel(sx,sy);return;}
   endStroke();
 });
 hc.addEventListener('pointercancel',e=>{
   if(e.pointerType==='touch')return;
-  pid=null;S.dragBlock=null;S.resizeBlock=null;isPan=false;wrap.classList.remove('panning');cancelStroke();
+  pid=null;S.dragBlock=null;S.resizeBlock=null;S.selecting=false;selBox.style.display='none';isPan=false;wrap.classList.remove('panning');cancelStroke();
 });
 
 // ── TOUCH ────────────────────────────────────────────────────
 hc.addEventListener('touchstart',e=>{
   e.preventDefault();
   if(e.touches.length===2){
-    tDraw=false;tPan=false;S.dragBlock=null;S.resizeBlock=null;
+    tDraw=false;tPan=false;S.dragBlock=null;S.resizeBlock=null;S.selecting=false;selBox.style.display='none';
     cancelStroke();
     const r=cRect();
     const dx=e.touches[0].clientX-e.touches[1].clientX;
@@ -615,11 +663,14 @@ function cancelStroke(){
 // ── TOOLS ────────────────────────────────────────────────────
 function setTool(t){
   S.tool=t;
-  ['Pen','Eraser','Pan'].forEach(n=>document.getElementById('tool'+n).classList.remove('active'));
-  document.getElementById('tool'+{pen:'Pen',eraser:'Eraser',pan:'Pan'}[t]).classList.add('active');
+  ['Pen','Eraser','Pan','Select'].forEach(n=>document.getElementById('tool'+n)&&document.getElementById('tool'+n).classList.remove('active'));
+  const map={pen:'Pen',eraser:'Eraser',pan:'Pan',select:'Select'};
+  const el=document.getElementById('tool'+map[t]);
+  if(el)el.classList.add('active');
   wrap.className='';
   if(t==='pan')wrap.classList.add('mode-pan');
   if(t==='eraser')wrap.classList.add('mode-eraser');
+  if(t==='select')wrap.classList.add('mode-select');
 }
 function updatePenSize(v){
   S.penSize=parseInt(v);
@@ -805,6 +856,117 @@ function removeBlock(id){
   redrawAll();save();
 }
 
+// ── SELECT + AI ──────────────────────────────────────────────
+const selBox=document.getElementById('selBox');
+const aiPanel=document.getElementById('aiPanel');
+const aiBody=document.getElementById('aiBody');
+let lastSelCapture=null;
+
+function startSel(sx,sy){
+  S.selecting=true;
+  S.sel0x=sx;S.sel0y=sy;S.sel1x=sx;S.sel1y=sy;
+  updateSelBox();
+}
+
+function updateSel(sx,sy){
+  S.sel1x=sx;S.sel1y=sy;
+  updateSelBox();
+}
+
+function updateSelBox(){
+  const x=Math.min(S.sel0x,S.sel1x);
+  const y=Math.min(S.sel0y,S.sel1y);
+  const w=Math.abs(S.sel1x-S.sel0x);
+  const h=Math.abs(S.sel1y-S.sel0y);
+  const toolbarH=56;
+  selBox.style.display='block';
+  selBox.style.left=x+'px';
+  selBox.style.top=(y+toolbarH)+'px';
+  selBox.style.width=w+'px';
+  selBox.style.height=h+'px';
+}
+
+function endSel(sx,sy){
+  S.sel1x=sx;S.sel1y=sy;
+  S.selecting=false;
+  selBox.style.display='none';
+  const w=Math.abs(S.sel1x-S.sel0x);
+  const h=Math.abs(S.sel1y-S.sel0y);
+  if(w<20||h<20){return;}
+  captureAndExplain();
+}
+
+function captureAndExplain(){
+  const x=Math.min(S.sel0x,S.sel1x);
+  const y=Math.min(S.sel0y,S.sel1y);
+  const w=Math.abs(S.sel1x-S.sel0x);
+  const h=Math.abs(S.sel1y-S.sel0y);
+  // Capture region from both grid and draw canvases
+  const out=document.createElement('canvas');
+  out.width=w;out.height=h;
+  const ctx=out.getContext('2d');
+  ctx.drawImage(gc,x,y,w,h,0,0,w,h);
+  ctx.drawImage(dc,x,y,w,h,0,0,w,h);
+  const imgData=out.toDataURL('image/jpeg',0.92);
+  lastSelCapture=imgData;
+  // Position panel near selection
+  const panelX=Math.min(S.sel1x+16, window.innerWidth-400);
+  const panelY=Math.max(Math.min(S.sel0y, S.sel1y)+56, 70);
+  aiPanel.style.left=Math.max(8,panelX)+'px';
+  aiPanel.style.top=Math.min(panelY, window.innerHeight-300)+'px';
+  aiPanel.classList.add('show');
+  aiBody.innerHTML='<div class="ai-thinking"><div class="ai-dots"><span></span><span></span><span></span></div>Analysing your selection…</div>';
+  callAI(imgData);
+}
+
+async function callAI(imgData){
+  try{
+    const b64=imgData.split(',')[1];
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:1000,
+        system:'You are a maths tutor. The user has selected a region of their maths whiteboard containing a question or problem. Explain how to solve it step by step. Be clear and concise. Format your response as JSON only with this exact shape: {"steps":[{"num":1,"title":"Short title","body":"explanation"},...],"summary":"one sentence summary"}. No markdown, no extra text, just the JSON.',
+        messages:[{role:'user',content:[
+          {type:'image',source:{type:'base64',media_type:'image/jpeg',data:b64}},
+          {type:'text',text:'Explain how to solve this maths problem step by step.'}
+        ]}]
+      })
+    });
+    const data=await resp.json();
+    const text=data.content&&data.content[0]&&data.content[0].text;
+    if(!text)throw new Error('No response');
+    let parsed;
+    try{parsed=JSON.parse(text.replace(/```json|```/g,'').trim());}
+    catch(e){
+      // fallback: show raw text nicely
+      aiBody.innerHTML=`<div class="ai-step"><div class="ai-step-text">${text.replace(/\n/g,'<br>')}</div></div>`;
+      return;
+    }
+    let html='';
+    if(parsed.summary) html+=`<div style="font-size:12px;color:#6b7280;margin-bottom:12px;padding:8px 12px;background:#f0f9ff;border-radius:8px;">${parsed.summary}</div>`;
+    for(const s of (parsed.steps||[])){
+      html+=`<div class="ai-step"><div class="ai-step-num">Step ${s.num} — ${s.title||''}</div><div class="ai-step-text">${s.body.replace(/\n/g,'<br>')}</div></div>`;
+    }
+    aiBody.innerHTML=html||'<div style="padding:12px;color:#6b7280">No steps found.</div>';
+  }catch(err){
+    aiBody.innerHTML=`<div style="padding:16px;color:#ef4444;font-size:13px;">Error: ${err.message}<br><br>Make sure you have a valid Anthropic API key set up.</div>`;
+  }
+}
+
+function retryAI(){
+  if(!lastSelCapture)return;
+  aiBody.innerHTML='<div class="ai-thinking"><div class="ai-dots"><span></span><span></span><span></span></div>Trying again…</div>';
+  callAI(lastSelCapture);
+}
+
+function closeAI(){
+  aiPanel.classList.remove('show');
+  setTool('pen');
+}
+
 // ── KEYBOARD ─────────────────────────────────────────────────
 document.addEventListener('keydown',e=>{
   if(e.target.tagName==='INPUT')return;
@@ -812,6 +974,7 @@ document.addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&(e.key==='y'||(e.shiftKey&&e.key==='z'))){e.preventDefault();redo();}
   if(e.key==='p'||e.key==='P')setTool('pen');
   if(e.key==='e'||e.key==='E')setTool('eraser');
+  if(e.key==='a'||e.key==='A')setTool('select');
   if(e.key===' '){e.preventDefault();setTool('pan');}
 });
 document.addEventListener('keyup',e=>{
