@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Math Whiteboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #ffffff;
+            font-family: sans-serif;
+            touch-action: none; /* Disables default browser scrolling/zooming */
+        }
+        #ui-container {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 10;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            border: 1px solid #ccc;
+        }
+        canvas {
+            display: block;
+        }
+        input, button {
+            margin: 5px 0;
+            padding: 5px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .instructions {
+            font-size: 12px;
+            color: #555;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui-container">
+        <b>Math Board</b>
+        <input type="text" id="pdf-url" placeholder="Paste PDF URL here...">
+        <button id="load-url-btn">Load PDF from URL</button>
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 10px 0;">
+        <input type="file" id="pdf-file" accept="application/pdf">
+        <button id="clear-btn">Clear Board (Double Click)</button>
+        <div class="instructions">
+            <b>Pen/1-Finger:</b> Draw<br>
+            <b>Right-Click/2-Fingers:</b> Pan around<br>
+            <b>Scroll Wheel:</b> Zoom
+        </div>
+    </div>
+
+    <canvas id="board"></canvas>
+
+    <script>
+        // Set up PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+
+        const canvas = document.getElementById('board');
+        const ctx = canvas.getContext('2d');
+
+        // State variables
+        let camera = { x: 0, y: 0, zoom: 1 };
+        let isDrawing = false;
+        let isPanning = false;
+        let lastX = 0;
+        let lastY = 0;
+        
+        // Data storage
+        let strokes = []; // Array of drawn lines
+        let currentStroke = null;
+        let images = [];  // Array of imported PDF pages
+
+        // Resize canvas to fill screen
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            draw();
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // --- DRAWING & PANNING LOGIC ---
+
+        // Convert screen coordinates to canvas/world coordinates
+        function getWorldCoords(e) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            return {
+                x: (clientX - rect.left - camera.x) / camera.zoom,
+                y: (clientY - rect.top - camera.y) / camera.zoom
+            };
+        }
+
+        canvas.addEventListener('pointerdown', (e) => {
+            // Right click or multi-touch triggers panning
+            if (e.button === 2 || (e.touches && e.touches.length > 1)) {
+                isPanning = true;
+                lastX = e.clientX;
+                lastY = e.clientY;
+                return;
+            }
+
+            // Otherwise, start drawing
+            isDrawing = true;
+            const coords = getWorldCoords(e);
+            currentStroke = [coords];
+            strokes.push(currentStroke);
+            
+            // Fix for dotting: start the path immediately
+            ctx.beginPath();
+            ctx.moveTo(coords.x, coords.y);
+            canvas.setPointerCapture(e.pointerId);
+        });
+
+        canvas.addEventListener('pointermove', (e) => {
+            if (isPanning) {
+                camera.x += (e.clientX - lastX);
+                camera.y += (e.clientY - lastY);
+                lastX = e.clientX;
+                lastY = e.clientY;
+                draw();
+                return;
+            }
+
+            if (!isDrawing) return;
+
+            const coords = getWorldCoords(e);
+            currentStroke.push(coords);
+            
+            // This prevents the dot-dot-dot issue by drawing lines between fast movements
+            draw(); 
+        });
+
+        canvas.addEventListener('pointerup', (e) => {
+            isDrawing = false;
+            isPanning = false;
+            canvas.releasePointerCapture(e.pointerId);
+            saveData();
+        });
+
+        // Prevent context menu on right click
+        canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+        // Zooming logic
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoomAmount = e.deltaY * -0.001;
+            const newZoom = Math.min(Math.max(0.1, camera.zoom + zoomAmount), 10);
+            
+            // Zoom towards the mouse cursor
+            const mouseX = e.clientX;
+            const mouseY = e.clientY;
+            
+            camera.x = mouseX - (mouseX - camera.x) * (newZoom / camera.zoom);
+            camera.y = mouseY - (mouseY - camera.y) * (newZoom / camera.zoom);
+            camera.zoom = newZoom;
+            
+            draw();
+        }, { passive: false });
+
+        // --- RENDER LOGIC ---
+
+        function draw() {
+            // Clear screen
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Apply camera transform
+            ctx.setTransform(camera.zoom, 0, 0, camera.zoom, camera.x, camera.y);
+
+            // Draw Grid
+            drawGrid();
+
+            // Draw PDF Images
+            images.forEach(imgData => {
+                ctx.drawImage(imgData.img, imgData.x, imgData.y, imgData.width, imgData.height);
+            });
+
+            // Draw Strokes
+            ctx.strokeStyle = 'black';
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            // Scale line width so it stays constant relative to the board
+            ctx.lineWidth = 2 / camera.zoom; 
+
+            strokes.forEach(stroke => {
+                if (stroke.length === 0) return;
+                ctx.beginPath();
+                ctx.moveTo(stroke[0].x, stroke[0].y);
+                for (let i = 1; i < stroke.length; i++) {
+                    ctx.lineTo(stroke[i].x, stroke[i].y);
+                }
+                ctx.stroke();
+            });
+        }
+
+        function drawGrid() {
+            const gridSize = 50;
+            const left = -camera.x / camera.zoom;
+            const top = -camera.y / camera.zoom;
+            const right = left + canvas.width / camera.zoom;
+            const bottom = top + canvas.height / camera.zoom;
+
+            ctx.strokeStyle = '#e0e0e0';
+            ctx.lineWidth = 1 / camera.zoom;
+            ctx.beginPath();
+
+            for (let x = Math.floor(left / gridSize) * gridSize; x < right; x += gridSize) {
+                ctx.moveTo(x, top);
+                ctx.lineTo(x, bottom);
+            }
+            for (let y = Math.floor(top / gridSize) * gridSize; y < bottom; y += gridSize) {
+                ctx.moveTo(left, y);
+                ctx.lineTo(right, y);
+            }
+            ctx.stroke();
+        }
+
+        // --- PDF IMPORT LOGIC ---
+
+        async function processPDF(pdfData) {
+            try {
+                const loadingTask = pdfjsLib.getDocument(pdfData);
+                const pdf = await loadingTask.promise;
+                let currentYOffset = 0;
+
+                for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                    const page = await pdf.getPage(pageNum);
+                    const viewport = page.getViewport({ scale: 1.5 });
+                    
+                    // Render to an off-screen canvas
+                    const offCanvas = document.createElement('canvas');
+                    const offCtx = offCanvas.getContext('2d');
+                    offCanvas.width = viewport.width;
+                    offCanvas.height = viewport.height;
+
+                    await page.render({ canvasContext: offCtx, viewport: viewport }).promise;
+
+                    // Convert to image and store
+                    const img = new Image();
+                    img.src = offCanvas.toDataURL();
+                    
+                    await new Promise(resolve => img.onload = resolve);
+
+                    images.push({
+                        img: img,
+                        src: img.src,
+                        x: 100, // Place it slightly off origin
+                        y: currentYOffset,
+                        width: viewport.width,
+                        height: viewport.height
+                    });
+
+                    // Stack the next page below this one
+                    currentYOffset += viewport.height + 50; 
+                }
+                draw();
+                saveData();
+                alert("PDF Loaded Successfully!");
+            } catch (error) {
+                alert("Error loading PDF: " + error.message + "\n\nIf using a URL, this is likely a CORS block. Please download the PDF and use the file uploader instead.");
+            }
+        }
+
+        document.getElementById('load-url-btn').addEventListener('click', () => {
+            const url = document.getElementById('pdf-url').value;
+            if (url) processPDF(url);
+        });
+
+        document.getElementById('pdf-file').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const fileReader = new FileReader();
+            fileReader.onload = function() {
+                const typedarray = new Uint8Array(this.result);
+                processPDF(typedarray);
+            };
+            fileReader.readAsArrayBuffer(file);
+        });
+
+        // --- SAVE/LOAD LOGIC ---
+        // Note: localStorage has a ~5MB limit. Large PDFs might break this.
+        
+        function saveData() {
+            try {
+                const data = {
+                    strokes: strokes,
+                    // We only save the image sources (base64) and positions
+                    images: images.map(img => ({ src: img.src, x: img.x, y: img.y, width: img.width, height: img.height }))
+                };
+                localStorage.setItem('math_board_data', JSON.stringify(data));
+            } catch(e) {
+                console.warn("Storage limit reached, unable to save full board state.");
+            }
+        }
+
+        function loadData() {
+            const saved = localStorage.getItem('math_board_data');
+            if (saved) {
+                const data = JSON.parse(saved);
+                strokes = data.strokes || [];
+                
+                if (data.images) {
+                    data.images.forEach(imgData => {
+                        const img = new Image();
+                        img.onload = () => draw();
+                        img.src = imgData.src;
+                        images.push({
+                            img: img,
+                            src: imgData.src,
+                            x: imgData.x,
+                            y: imgData.y,
+                            width: imgData.width,
+                            height: imgData.height
+                        });
+                    });
+                }
+            }
+            draw();
+        }
+
+        // Clear Board
+        document.getElementById('clear-btn').addEventListener('dblclick', () => {
+            strokes = [];
+            images = [];
+            localStorage.removeItem('math_board_data');
+            draw();
+        });
+
+        // Initialize
+        loadData();
+
+    </script>
+</body>
+</html>
