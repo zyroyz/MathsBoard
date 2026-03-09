@@ -919,29 +919,34 @@ function captureAndExplain(){
   callAI(imgData);
 }
 
+const OR_KEY='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';
+
 async function callAI(imgData){
   try{
     const b64=imgData.split(',')[1];
-    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+    const resp=await fetch('https://openrouter.ai/api/v1/chat/completions',{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers:{
+        'Content-Type':'application/json',
+        'Authorization':'Bearer '+OR_KEY,
+        'HTTP-Referer':'https://mathboard.app',
+        'X-Title':'MathBoard'
+      },
       body:JSON.stringify({
-        model:'claude-sonnet-4-20250514',
+        model:'meta-llama/llama-4-maverick:free',
         max_tokens:1000,
-        system:'You are a maths tutor. The user has selected a region of their maths whiteboard containing a question or problem. Explain how to solve it step by step. Be clear and concise. Format your response as JSON only with this exact shape: {"steps":[{"num":1,"title":"Short title","body":"explanation"},...],"summary":"one sentence summary"}. No markdown, no extra text, just the JSON.',
         messages:[{role:'user',content:[
-          {type:'image',source:{type:'base64',media_type:'image/jpeg',data:b64}},
-          {type:'text',text:'Explain how to solve this maths problem step by step.'}
+          {type:'image_url',image_url:{url:'data:image/jpeg;base64,'+b64}},
+          {type:'text',text:'You are a maths tutor. Explain how to solve this maths problem step by step. Reply with JSON only, no markdown, in this exact shape: {"steps":[{"num":1,"title":"Short title","body":"explanation"},...],"summary":"one sentence summary"}'}
         ]}]
       })
     });
     const data=await resp.json();
-    const text=data.content&&data.content[0]&&data.content[0].text;
-    if(!text)throw new Error('No response');
+    const text=data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content;
+    if(!text)throw new Error(data.error&&data.error.message||'No response');
     let parsed;
     try{parsed=JSON.parse(text.replace(/```json|```/g,'').trim());}
     catch(e){
-      // fallback: show raw text nicely
       aiBody.innerHTML=`<div class="ai-step"><div class="ai-step-text">${text.replace(/\n/g,'<br>')}</div></div>`;
       return;
     }
@@ -952,7 +957,7 @@ async function callAI(imgData){
     }
     aiBody.innerHTML=html||'<div style="padding:12px;color:#6b7280">No steps found.</div>';
   }catch(err){
-    aiBody.innerHTML=`<div style="padding:16px;color:#ef4444;font-size:13px;">Error: ${err.message}<br><br>Make sure you have a valid Anthropic API key set up.</div>`;
+    aiBody.innerHTML=`<div style="padding:16px;color:#ef4444;font-size:13px;">Error: ${err.message}</div>`;
   }
 }
 
