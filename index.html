@@ -450,7 +450,7 @@ hc.addEventListener('pointerup',e=>{
 });
 hc.addEventListener('pointercancel',e=>{
   if(e.pointerType==='touch')return;
-  pid=null;S.dragBlock=null;S.resizeBlock=null;isPan=false;wrap.classList.remove('panning');endStroke();
+  pid=null;S.dragBlock=null;S.resizeBlock=null;isPan=false;wrap.classList.remove('panning');cancelStroke();
 });
 
 // ── TOUCH ────────────────────────────────────────────────────
@@ -458,7 +458,7 @@ hc.addEventListener('touchstart',e=>{
   e.preventDefault();
   if(e.touches.length===2){
     tDraw=false;tPan=false;S.dragBlock=null;S.resizeBlock=null;
-    if(S.drawing)endStroke();
+    cancelStroke();
     const r=cRect();
     const dx=e.touches[0].clientX-e.touches[1].clientX;
     const dy=e.touches[0].clientY-e.touches[1].clientY;
@@ -530,7 +530,15 @@ hc.addEventListener('touchmove',e=>{
 
 hc.addEventListener('touchend',e=>{
   e.preventDefault();
-  if(e.touches.length<2)pinchD0=null;
+  if(e.touches.length<2){
+    if(pinchD0!==null){
+      pinchD0=null;
+      cancelStroke();
+      tDraw=false;tPan=false;
+      return;
+    }
+    pinchD0=null;
+  }
   if(e.touches.length===0){
     if(S.dragBlock){S.dragBlock=null;save();return;}
     if(S.resizeBlock){S.resizeBlock=null;save();return;}
@@ -577,6 +585,10 @@ function endStroke(){
   S.redoStack=[];
   S.currentStroke=null;S.drawing=false;
   redrawAll();save();
+}
+function cancelStroke(){
+  S.currentStroke=null;S.drawing=false;tDraw=false;
+  redrawAll();
 }
 
 // ── TOOLS ────────────────────────────────────────────────────
