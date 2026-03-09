@@ -58,12 +58,26 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'DM Sans',sans-seri
 .qb-list::-webkit-scrollbar{width:4px}
 .qb-list::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:2px}
 .qb-source{background:#f9fafb;border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
-.qb-source-header{padding:10px 14px;display:flex;align-items:center;justify-content:space-between}
-.qb-source-name{font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px}
-.qb-source-meta{font-size:11px;color:var(--muted)}
+.qb-toolbar{padding:10px 12px 0;display:flex;align-items:center;gap:6px;flex-shrink:0}
+.qb-sort{flex:1;height:30px;border:1px solid var(--border);border-radius:var(--rs);background:#f9fafb;font-family:'DM Sans',sans-serif;font-size:12px;color:var(--text);padding:0 8px;outline:none;cursor:pointer}
+.qb-sort:focus{border-color:var(--accent)}
+.qb-source-header{padding:10px 12px;display:flex;align-items:center;gap:8px;cursor:pointer;transition:background .15s;user-select:none;-webkit-user-select:none}
+.qb-source-header:hover{background:#f0f2f8}
+.qb-source-chevron{flex-shrink:0;transition:transform .2s;color:var(--muted)}
+.qb-source.collapsed .qb-source-chevron{transform:rotate(-90deg)}
+.qb-source.collapsed .qb-questions{display:none}
+.qb-source-info{flex:1;min-width:0}
+.qb-source-name{font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qb-source-meta{font-size:11px;color:var(--muted);margin-top:1px}
+.qb-source-actions{display:flex;align-items:center;gap:4px;flex-shrink:0}
+.qb-tag{font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;border:none;cursor:pointer;white-space:nowrap;transition:all .15s}
+.qb-del{width:20px;height:20px;border:none;background:transparent;cursor:pointer;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:13px;transition:all .15s}
+.qb-del:hover{background:#fee2e2;color:#ef4444}
 .qb-questions{padding:0 8px 8px;display:flex;flex-direction:column;gap:6px}
 .qb-q-item{background:#fff;border:1px solid var(--border);border-radius:var(--rs);padding:10px 12px;display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
-.qb-q-preview{font-size:12px;color:var(--muted);line-height:1.5;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;flex:1}
+.qb-q-left{flex:1;min-width:0}
+.qb-q-num{font-size:10px;font-weight:700;color:var(--accent);margin-bottom:2px}
+.qb-q-preview{font-size:12px;color:var(--muted);line-height:1.5;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .qb-q-add{flex-shrink:0;width:26px;height:26px;background:var(--accent-l);color:var(--accent);border:none;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;line-height:1;transition:all .15s}
 .qb-q-add:hover{background:var(--accent);color:#fff}
 
@@ -137,6 +151,13 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'DM Sans',sans-seri
       Question Bank <span class="qb-count" id="qbCount">0</span>
     </div>
     <button class="qb-close" onclick="toggleQB()">✕</button>
+  </div>
+  <div class="qb-toolbar">
+    <select class="qb-sort" id="qbSort" onchange="renderQB()">
+      <option value="name">Sort: A–Z</option>
+      <option value="date">Sort: Newest</option>
+      <option value="cat">Sort: Category</option>
+    </select>
   </div>
   <div id="qbEmpty" class="qb-empty">
     <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
@@ -670,7 +691,7 @@ async function importPDF(){
     }
     const ei=S.questionBank.findIndex(s=>s.sourceName===srcName);
     if(ei>=0)S.questionBank.splice(ei,1);
-    S.questionBank.push({sourceId:srcId,sourceName:srcName,url,questions});
+    S.questionBank.push({sourceId:srcId,sourceName:srcName,url,questions,importedAt:Date.now(),category:'Other'});
     save();renderQB();
     document.getElementById('importUrl').value='';
     toggleQB(true);
@@ -682,11 +703,34 @@ async function importPDF(){
 }
 
 // ── QUESTION BANK ────────────────────────────────────────────
+const CAT_COLORS=[
+  {bg:'#e0e7ff',txt:'#3730a3'},{bg:'#dcfce7',txt:'#166534'},
+  {bg:'#fef9c3',txt:'#854d0e'},{bg:'#fce7f3',txt:'#9d174d'},
+  {bg:'#ffedd5',txt:'#9a3412'},{bg:'#e0f2fe',txt:'#075985'},
+  {bg:'#f3e8ff',txt:'#6b21a8'},{bg:'#fef2f2',txt:'#991b1b'},
+];
+const CATS=['Algebra','Geometry','Calculus','Statistics','Mechanics','Numbers','Trigonometry','Other'];
+
 function toggleQB(force){
   S.qbOpen=force!==undefined?!!force:!S.qbOpen;
   document.getElementById('qbPanel').classList.toggle('open',S.qbOpen);
   document.getElementById('qbToggleBtn').classList.toggle('active',S.qbOpen);
 }
+
+function cycleCategory(srcId){
+  const src=S.questionBank.find(s=>s.sourceId===srcId);
+  if(!src)return;
+  const idx=CATS.indexOf(src.category||'Other');
+  src.category=CATS[(idx+1)%CATS.length];
+  save();renderQB();
+}
+
+function deleteSource(srcId){
+  if(!confirm('Remove this PDF from the question bank?'))return;
+  S.questionBank=S.questionBank.filter(s=>s.sourceId!==srcId);
+  save();renderQB();
+}
+
 function renderQB(){
   const list=document.getElementById('qbList');
   const empty=document.getElementById('qbEmpty');
@@ -694,15 +738,47 @@ function renderQB(){
   document.getElementById('qbCount').textContent=total;
   if(!S.questionBank.length){empty.style.display='flex';list.style.display='none';return;}
   empty.style.display='none';list.style.display='flex';
+
+  const sortVal=(document.getElementById('qbSort')||{value:'name'}).value;
+  const sorted=[...S.questionBank].sort((a,b)=>{
+    if(sortVal==='cat') return (a.category||'Other').localeCompare(b.category||'Other');
+    if(sortVal==='date') return (b.importedAt||0)-(a.importedAt||0);
+    return a.sourceName.localeCompare(b.sourceName);
+  });
+
   list.innerHTML='';
-  for(const src of S.questionBank){
-    const se=document.createElement('div');se.className='qb-source';
+  for(const src of sorted){
+    const cat=src.category||'Other';
+    const catIdx=CATS.indexOf(cat)%CAT_COLORS.length;
+    const col=CAT_COLORS[catIdx>=0?catIdx:0];
+    const collapsed=src.collapsed||false;
+
+    const se=document.createElement('div');
+    se.className='qb-source'+(collapsed?' collapsed':'');
+
     const hdr=document.createElement('div');hdr.className='qb-source-header';
-    hdr.innerHTML=`<div class="qb-source-name">${esc(src.sourceName)}</div><div class="qb-source-meta">${src.questions.length} pages</div>`;
+    hdr.innerHTML=`
+      <svg class="qb-source-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      <div class="qb-source-info">
+        <div class="qb-source-name">${esc(src.sourceName)}</div>
+        <div class="qb-source-meta">${src.questions.length} pages</div>
+      </div>
+      <div class="qb-source-actions">
+        <button class="qb-tag" style="background:${col.bg};color:${col.txt}" title="Click to change category">${esc(cat)}</button>
+        <button class="qb-del" title="Remove">✕</button>
+      </div>`;
+
+    hdr.querySelector('.qb-tag').onclick=ev=>{ev.stopPropagation();cycleCategory(src.sourceId);};
+    hdr.querySelector('.qb-del').onclick=ev=>{ev.stopPropagation();deleteSource(src.sourceId);};
+    hdr.addEventListener('click',()=>{
+      src.collapsed=!src.collapsed;
+      se.classList.toggle('collapsed',src.collapsed);
+    });
+
     const qw=document.createElement('div');qw.className='qb-questions';
     for(const q of src.questions){
       const qe=document.createElement('div');qe.className='qb-q-item';
-      qe.innerHTML=`<div class="qb-q-preview">Page ${q.pageNum}: ${esc(q.text.slice(0,100))}</div><button class="qb-q-add">+</button>`;
+      qe.innerHTML=`<div class="qb-q-left"><div class="qb-q-num">Page ${q.pageNum}</div><div class="qb-q-preview">${esc(q.text.slice(0,120))}</div></div><button class="qb-q-add" title="Add to board">+</button>`;
       qe.querySelector('.qb-q-add').onclick=ev=>{ev.stopPropagation();addBlock(q,src.sourceName,src.sourceId);};
       qw.appendChild(qe);
     }
