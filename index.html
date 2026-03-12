@@ -919,30 +919,24 @@ function captureAndExplain(){
   callAI(imgData);
 }
 
-const OR_KEY='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';
+const GEMINI_KEY='AIzaSyBmNaaQ3gZDi55csSaBDPLDKlawBL4Dkz8';
 
 async function callAI(imgData){
   try{
     const b64=imgData.split(',')[1];
-    const resp=await fetch('https://openrouter.ai/api/v1/chat/completions',{
+    const resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+GEMINI_KEY,{
       method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'Authorization':'Bearer '+OR_KEY,
-        'HTTP-Referer':'https://mathboard.app',
-        'X-Title':'MathBoard'
-      },
+      headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
-        model:'meta-llama/llama-4-maverick:free',
-        max_tokens:1000,
-        messages:[{role:'user',content:[
-          {type:'image_url',image_url:{url:'data:image/jpeg;base64,'+b64}},
-          {type:'text',text:'You are a maths tutor. Explain how to solve this maths problem step by step. Reply with JSON only, no markdown, in this exact shape: {"steps":[{"num":1,"title":"Short title","body":"explanation"},...],"summary":"one sentence summary"}'}
-        ]}]
+        contents:[{parts:[
+          {inline_data:{mime_type:'image/jpeg',data:b64}},
+          {text:'You are a maths tutor. Explain how to solve this maths problem step by step. Reply with JSON only, no markdown, in this exact shape: {"steps":[{"num":1,"title":"Short title","body":"explanation"},...],"summary":"one sentence summary"}'}
+        ]}],
+        generationConfig:{maxOutputTokens:1000,temperature:0.3}
       })
     });
     const data=await resp.json();
-    const text=data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content;
+    const text=data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0]&&data.candidates[0].content.parts[0].text;
     if(!text)throw new Error(data.error&&data.error.message||'No response');
     let parsed;
     try{parsed=JSON.parse(text.replace(/```json|```/g,'').trim());}
